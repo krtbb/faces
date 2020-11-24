@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D
+from tensorflow.keras.layers import Dense, Flatten, Conv2D, MaxPooling2D, Dropout
 from tensorflow.keras import Model
 
 class FirstCNN(Model):
@@ -48,14 +48,29 @@ class FirstCNN(Model):
         if insize == 32:
             self.conv1 = Conv2D(128, 5, strides=1, paddings='same', activation=activation) # (32, 32, 128)
             self.shrink1 = shrink(128, 5, 2) # (16, 16, 128)
+            self.dropout1 = Dropout(0.1)
             self.conv2 = Conv2D(64, 4, strides=1, paddings='same', activation=activation) # (16, 16, 64)
             self.shrink2 = shrink(64, 4, 2) # (8, 8, 64) = 4096
+            self.dropout2 = Dropout(0.1)
+            self.conv3 = Conv2D(64, 3, strides=1, paddings='same', activation=activation) # (8, 8, 32)
+            self.shrink3 = shrink(64, 3, 2) # (4, 4, 64) = 1024
         else:
             raise ValueError('Invalid insize: {}'.format(insize))
         
-        self.l1 = Dense()
+        self.l1 = Dense(1024, activation=activation)
+        self.l2 = Dense(512, activation=activation)
+        self.l3 = Dense(256, activation=activation)
+        self.l4 = Dense(self.outsize, activation=activation)
 
+    def __call__(self, x):
+        h = self.dropout1(self.shrink1(self.conv1(x)))
+        h = self.dropout2(self.shrink2(self.conv2(x)))
+        h = self.shrink3(self.conv3(x))
+        h = Flatten()(h)
+        h = self.l1(h)
+        h = self.l2(h)
+        h = self.l3(h)
+        y = self.l4(h)
 
-    def __call__(self)
-        return 0
+        return y
         
