@@ -13,7 +13,7 @@ def mobilenet(input_shape=(160, 160, 3)):
     dense = L.Dense(128)
 
     inputs = tf.keras.Input(shape=input_shape)
-    h = basemodel(inputs)
+    h = basemodel(inputs, training=True)
     h = gal(h)
     outputs = dense(h)
     
