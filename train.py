@@ -7,9 +7,10 @@ import tensorflow as tf
 from glob import glob
 from tqdm import tqdm
 
-from models.gen1 import FirstCNN
-from models.mobilenet import mobilenet
+from models.micro import FirstCNN
+from models.apps import app_net
 
+from losses import pairwise_loss, triplet_loss
 from utils.preparations import channelSwap, normalize, resize
 from preprocess import load_and_preprocess_image
 
@@ -19,7 +20,8 @@ def main(
         batchsize = 32, 
         insize = 32,
         outsize = 128,
-        model_name = 'first'
+        model_name = 'first',
+        epsilon = 1e+5
     ):
     # load data
     def preprocess(path):
@@ -42,10 +44,32 @@ def main(
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     
     # load model
+    app_net_list = ['mobilenet', 'resnet50', 'resnet101', 'resnet152']
     if model_name == 'first':
         model = FirstCNN(insize=32, outsize=128)
-    elif model_name == 'mobilenet':
-        model = mobilenet(input_shape=(insize, insize, 3))
+    elif model_name in app_net_list:
+        model = app_net(
+            archname = model_name,
+            input_shape = (insize, insize, 3),
+            z_dim = outsize
+        )
+    else:
+        raise ValueError('Invalid model_name: {}'.format(model_name))
+
+    # load loss functions
+    if loss_name == 'pairwise':
+        #@tf.function
+        def loss_func(x, y, equal):
+            return pairwise_loss(x, y, equal, epsilon=epsilon)
+    elif loss_name == 'triplet':
+        #@tf.function
+        def loss_func(x, y, z):
+            return triplet_loss(x, y, z, epsilon=epsilon)
+    elif loss_name == 'arcface':
+        raise NotImplementedError()
+    else:
+        raise ValueError('Invalid loss_name: {}'.format(loss_name))
+
     @tf.function
     def train_step(x, y):
         x_ = model(x)
