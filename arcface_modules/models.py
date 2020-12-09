@@ -60,7 +60,7 @@ def ArcHead(num_classes, margin=0.5, logist_scale=64, name='ArcHead'):
                                     margin=margin,
                                     logist_scale=logist_scale)(x, y)
         return Model((inputs1, y), x, name=name)((x_in, y_in))
-    return arc_head
+    return arc_head # ArcHead Function,
 
 
 def NormHead(num_classes, w_decay=5e-4, name='NormHead'):
