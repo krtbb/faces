@@ -32,26 +32,34 @@ def main(
         outsize = 128,
         model_name = 'first',
         loss_name = 'pairwise',
-        epsilon = 1e+5
+        epsilon = 1e+5,
+        debug = False
     ):
     training_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Load data
-    def preprocess(path):
+    def preprocess_image(path):
         image = tf.io.read_file(path)
         image = tf.image.decode_jpeg(image, channels=3)
         image = tf.image.resize(image, [insize, insize])
         image /= 255.0
         return image
 
-    train_names = load_list(train_list)
+    def preprocess_label(path):
+        label = tf.strings.split(path, sep='/')[-2]
+        label = tf.cast(label, tf.int16)
+        return label
+
+    train_names = load_list(train_list)[:100]
     train_dataset_paths = tf.data.Dataset.from_tensor_slices(train_names)
-    train_dataset = train_dataset_paths.map(preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    train_dataset_x = tf.data.Dataset.zip((train_dataset, list(map(lambda x: x.split('/')[-2], train_names))))
-    test_names = load_list(test_list)
+    train_dataset_image = train_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    train_dataset_label = train_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    train_dataset_x = tf.data.Dataset.zip((train_dataset_image, train_dataset_label))
+    test_names = load_list(test_list)[:100]
     test_dataset_paths = tf.data.Dataset.from_tensor_slices(test_names)
-    test_dataset = test_dataset_paths.map(preprocess, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    test_dataset_x = tf.data.Dataset.zip((test_dataset, list(map(lambda x: x.split('/')[-2], test_names))))
+    test_dataset_image = test_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    test_dataset_label = test_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    test_dataset_x = tf.data.Dataset.zip((test_dataset_image, test_dataset_label))
     for dataset in [train_dataset_x, test_dataset_x]:
         dataset = dataset.shuffle(buffer_size=len(list(dataset)))
         dataset = dataset.repeat()
@@ -94,6 +102,8 @@ def main(
     
     if METRICS == 'distance':
         assert loss_name in ['pairwise', 'triplet']
+
+        # pairwise operations
         if loss_name == 'pairwise':
             @tf.function
             def train_step(x, y, equal):
@@ -112,7 +122,30 @@ def main(
                 loss = loss_func(x_, y_, equal)
                 test_loss(loss)
 
+        # triplet operations
+        elif loss_name == 'triplet':
+            @tf.function
+            def train_step(x, y, z):
+                with tf.GradientTape() as tape:
+                    x_ = model(x)
+                    y_ = model(y)
+                    z_ = model(z)
+                    loss = loss_func(x_, y_, z_)
+                gradients = tape.gradient(loss, model.trainable_variables)
+                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                train_loss(loss)
+
+            @tf.function
+            def test_step(x, y, z):
+                x_ = model(x)
+                y_ = model(y)
+                z_ = model(z)
+                loss = loss_func(x_, y_, z_)
+                test_loss(loss)
+
     elif METRICS == 'classification':
+
+        # arcface operations
         @tf.function
         def train_step(x, labels):
             with tf.GradientTape() as tape:
@@ -145,20 +178,33 @@ def main(
     # prepare training
 
     # execute train
-    train_dataset_y = copy.deepcopy(train_dataset_x)
-    test_dataset_y = copy.deepcopy(test_dataset_x)
-    if loss_name == 'triplet':
+    if loss_name in ['pairwise', 'triplet']:
+        train_dataset_y = copy.deepcopy(train_dataset_x)
+        test_dataset_y = copy.deepcopy(test_dataset_x)
+    if loss_name in ['triplet']:
         train_dataset_z = copy.deepcopy(train_dataset_x)
         test_dataset_z = copy.deepcopy(test_dataset_x)
     header = 'epoch trainloss, testloss'
     template = '{} {:.6f} {:.6f}'
     with open('logs/{}/history.csv'.format(training_id), 'w') as f:
         f.write(header + '\n')
-    for epoch in range(epochs):     
-        for (x_images, x_names), (y_images, y_names) in zip(train_dataset_x, train_dataset_y):
-            train_step(x_images, y_images, x_names==y_names)
-        for (x_images, x_names), (y_images, y_names) in zip(test_dataset_x, test_dataset_y):
-            test_step(x_images, y_images, x_names==y_names)
+    for epoch in range(epochs):
+        if loss_name == 'pairwise':
+            for (x_images, x_labels), (y_images, y_labels) in zip(train_dataset_x, train_dataset_y):
+                train_step(x_images, y_images, x_labels==y_labels)
+            for (x_images, x_labels), (y_images, y_labels) in zip(test_dataset_x, test_dataset_y):
+                test_step(x_images, y_images, x_labels==y_labels)
+        elif loss_name == 'triplet':
+            for (x_images, x_labels), (y_images, y_labels), (z_images, z_labels) in zip(train_dataset_x, train_dataset_y, train_dataset_z):
+                train_step(x_images, y_images, z_images)
+            for (x_images, x_labels), (y_images, y_labels), (z_images, z_labels) in zip(test_dataset_x, test_dataset_y, test_dataset_z):
+                test_step(x_images, y_images, z_images)
+        elif loss_name == 'arcface':
+            for images, labels in train_dataset_x:
+                train_step(x_images, x_labels)
+            for images, labels in test_dataset_x:
+                test_step(images, labels)
+
         print('{} |'.format(epochs) + template.format(epoch+1, train_loss.result(), test_loss.result()))
         with open('logs/{}/history.csv'.format(training_id), 'a') as f:
             f.write(template.format(epoch+1, train_loss.result(), test_loss.result())+'\n')
@@ -178,6 +224,7 @@ if __name__ == '__main__':
     parser.add_argument('--insize', '-SI', type=int, default=32, help='size of input images, int, default=32')
     parser.add_argument('--outsize', '-SO', type=int, default=128, help='size of embedded variables, int, default=128')
     parser.add_argument('--epsilon', '-P', type=float, default=1e+5, help='constants for margins in loss')
+    parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
     main(
@@ -189,6 +236,7 @@ if __name__ == '__main__':
         outsize = args.outsize,
         model_name = args.modelname,
         loss_name = args.lossname,
-        epsilon = args.epsilon
+        epsilon = args.epsilon,
+        debug = args.debug
     )
 
