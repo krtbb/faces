@@ -11,11 +11,11 @@ from glob import glob
 from tqdm import tqdm
 
 from models.micro import FirstCNN
-from models.apps import app_net
+from models.apps import FaceModel, app_net
 
-from losses import pairwise_loss, triplet_loss
+from utils.losses import pairwise_loss, triplet_loss
 from utils.preparations import channelSwap, normalize, resize
-from preprocess import load_and_preprocess_image
+from utils.preprocess import load_and_preprocess_image
 
 def load_list(path):
     with open(path) as f:
@@ -63,27 +63,27 @@ def main(
     ])
     
     # Load model
-    app_net_list = ['mobilenet', 'resnet50', 'resnet101', 'resnet152']
-    if model_name == 'first':
-        model = FirstCNN(insize=32, outsize=128)
-    elif model_name in app_net_list:
-        model = app_net(
-            archname = model_name,
-            input_shape = (insize, insize, 3),
-            z_dim = outsize
-        )
-    else:
-        raise ValueError('Invalid model_name: {}'.format(model_name))
+    model = FaceModel(size=insize, channels=3, z_dim=outsize,
+                      backbone_type=model_name, use_pretrain=True,
+                      w_decay=5e-4, name='facemodel')
 
     # Load loss functions
     if loss_name == 'pairwise':
+        METRICS = 'distance'
         def loss_func(x, y, equal):
             return pairwise_loss(x, y, equal, epsilon=epsilon)
     elif loss_name == 'triplet':
+        METRICS = 'distance'
         def loss_func(x, y, z):
             return triplet_loss(x, y, z, epsilon=epsilon)
     elif loss_name == 'arcface':
-        raise NotImplementedError()
+        METRICS = 'classification'
+        from arcface_modules.models import ArcHead
+        from arcface_modules.losses import SoftmaxLoss
+        def loss_func(z, labels, margin=0.5, logist_scale=64):
+            logist = ArcHead(num_classes=num_classes, margin=margin,
+                             logist_scale=logist_scale)(z, labels)
+            return SoftmaxLoss()(labels, logist)
     else:
         raise ValueError('Invalid loss_name: {}'.format(loss_name))
 
@@ -91,21 +91,41 @@ def main(
     optimizer = tf.keras.optimizers.Adam()
     train_loss = tf.keras.metrics.Mean(name='train_loss')
     test_loss = tf.keras.metrics.Mean(name='test_loss')
-    if loss_name == 'pairwise':
-        @tf.function
-        def train_step(x, y, equal):
-            with tf.GradientTape() as tape:
+    
+    if METRICS == 'distance':
+        assert loss_name in ['pairwise', 'triplet']
+        if loss_name == 'pairwise':
+            @tf.function
+            def train_step(x, y, equal):
+                with tf.GradientTape() as tape:
+                    x_ = model(x)
+                    y_ = model(y)
+                    loss = loss_func(x_, y_, equal)
+                gradients = tape.gradient(loss, model.trainable_variables)
+                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                train_loss(loss)
+
+            @tf.function
+            def test_step(x, y, equal):
                 x_ = model(x)
                 y_ = model(y)
                 loss = loss_func(x_, y_, equal)
-            gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-            train_loss(loss)
+                test_loss(loss)
+
+    elif METRICS == 'classification':
         @tf.function
-        def test_step(x, y, equal):
+        def train_step(x, labels):
+            with tf.GradientTape() as tape:
+                x_ = model(x)
+                loss = loss_func(x_, labels)
+            gradients = tape.gradient(loss, model.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model_trainable_variables))
+            train_loss(loss)
+        
+        @tf.function
+        def test_step(x, labels):
             x_ = model(x)
-            y_ = model(y)
-            loss = loss_func(x_, y_, equal)
+            loss = loss_func(x_, labels)
             test_loss(loss)
 
     # save config
@@ -151,13 +171,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('train_list', type=str, help='list for train data')
     parser.add_argument('test_list', type=str, help='list for test data')
-    parser.add_argument('--modelname', '-M', type=str, default='resnet50', help='name of model architecture')
+    parser.add_argument('--modelname', '-M', type=str, default='ResNet50', help='name of model architecture')
     parser.add_argument('--lossname', '-L', type=str, default='pairwise', help='name of loss function')
     parser.add_argument('--epochs', '-E', type=int, default=100)
     parser.add_argument('--batchsize', '-B', type=int, default=32)
     parser.add_argument('--insize', '-SI', type=int, default=32, help='size of input images, int, default=32')
     parser.add_argument('--outsize', '-SO', type=int, default=128, help='size of embedded variables, int, default=128')
-    parser.add_argument('--epsilon', '-P', type=float, default=1e+5, help='constants for margins in loss'
+    parser.add_argument('--epsilon', '-P', type=float, default=1e+5, help='constants for margins in loss')
     args = parser.parse_args()
 
     main(
