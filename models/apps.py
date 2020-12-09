@@ -3,6 +3,22 @@ import tensorflow as tf
 from tensorflow.keras import applications as app
 from tensorflow.keras import layers as L
 
+from arcface_modules.models import Backbone, OutputLayer, ArcHead, NormHead
+
+def FaceModel(size=64, channels=3, z_dim=128,
+              backbone_type = 'ResNet50',
+              use_pretrain = True,
+              w_decay = 5e-4,
+              name = 'facemodel'):
+    """Face Feature Embedding Model"""
+    x = inputs = Input([size, size, channels], name='input_image')
+
+    x = Backbone(backbone_type=backbone_type, use_pretrain=use_pretrain)(x)
+
+    z = OutputLayer(z_dim, w_decay=w_decay)(x)
+
+    return tf.keras.models.Model(inputs, z, name=name)
+
 def app_net(
         archname = 'mobilenet',
         z_dim = 128,
