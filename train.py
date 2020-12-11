@@ -120,7 +120,7 @@ def main(
         
     else:
         raise ValueError('Invalid loss_name: {}'.format(loss_name))
-    print('Finished')
+    print('Finished.')
 
     # Define graph
     print('Defining train_step()...', end='')
@@ -188,6 +188,7 @@ def main(
             x_ = model(x)
             loss = loss_func(x_, labels)
             test_loss(loss)
+    print('Finished.')
 
     print('Preparing training configure...', end='')
     # save config
