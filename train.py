@@ -47,7 +47,7 @@ def main(
 
     def preprocess_label(path):
         label = tf.strings.split(path, sep='/')[-2]
-        label = tf.cast(label, tf.int16)
+        label = tf.strings.to_number(label, tf.int32)
         return label
 
     train_names = load_list(train_list)[:100]
@@ -66,7 +66,7 @@ def main(
         dataset = dataset.batch(batchsize)
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     data_augmentation = tf.keras.Sequential([
-        tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
+        #tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
         #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
     ])
     
@@ -146,7 +146,7 @@ def main(
     elif METRICS == 'classification':
 
         # arcface operations
-        @tf.function
+        #@tf.function
         def train_step(x, labels):
             with tf.GradientTape() as tape:
                 x_ = model(x)
@@ -155,7 +155,7 @@ def main(
             optimizer.apply_gradients(zip(gradients, model_trainable_variables))
             train_loss(loss)
         
-        @tf.function
+        #@tf.function
         def test_step(x, labels):
             x_ = model(x)
             loss = loss_func(x_, labels)
@@ -172,6 +172,8 @@ def main(
     config['model_name'] = model_name
     config['loss_name'] = loss_name
     config['epsilon'] = epsilon
+    if not os.path.exists('logs/{}'.format(training_id)):
+        os.makedirs('logs/{}'.format(training_id))
     with open('logs/{}/train_config.json'.format(training_id), 'w') as f:
         json.dump(config, f)
 
@@ -201,7 +203,7 @@ def main(
                 test_step(x_images, y_images, z_images)
         elif loss_name == 'arcface':
             for images, labels in train_dataset_x:
-                train_step(x_images, x_labels)
+                train_step(images, labels)
             for images, labels in test_dataset_x:
                 test_step(images, labels)
 

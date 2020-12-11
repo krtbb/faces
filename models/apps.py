@@ -11,7 +11,7 @@ def FaceModel(size=64, channels=3, z_dim=128,
               w_decay = 5e-4,
               name = 'facemodel'):
     """Face Feature Embedding Model"""
-    x = inputs = Input([size, size, channels], name='input_image')
+    x = inputs = L.Input([size, size, channels], name='input_image')
 
     x = Backbone(backbone_type=backbone_type, use_pretrain=use_pretrain)(x)
 
