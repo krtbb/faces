@@ -24,7 +24,7 @@ class ArcMarginPenaltyLogists(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         ### define parameters like w, b, and so on.
-        self.w = self.add_variable(
+        self.w = self.add_weight(
             "weights", shape=[int(input_shape[-1]), self.num_classes]) # [dim, classes]
         self.cos_m = tf.identity(math.cos(self.margin), name='cos_m') # float
         self.sin_m = tf.identity(math.sin(self.margin), name='sin_m') # float
