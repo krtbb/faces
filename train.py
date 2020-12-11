@@ -38,6 +38,7 @@ def main(
     training_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     # Load data
+    print('Load data...', end='')
     def preprocess_image(path):
         image = tf.io.read_file(path)
         image = tf.image.decode_jpeg(image, channels=3)
@@ -61,7 +62,6 @@ def main(
         train_names = train_names[:64]
         test_names = test_names[:64]
     num_classes = get_num_classes(train_names, test_names)
-    print('### num_classes: ', num_classes)
 
     train_dataset_paths = tf.data.Dataset.from_tensor_slices(train_names)
     train_dataset_image = train_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -85,14 +85,18 @@ def main(
         tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
         #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
     ])
+    print('Finished.')
     
     # Load model
+    print('Defining model...', end='')
     model = FaceModel(size=insize, channels=3, z_dim=outsize,
                       backbone_type=model_name, use_pretrain=False,
                       w_decay=5e-4, name='facemodel')
+    print('Finished.')
     model.summary()
 
     # Load loss functions
+    print('Defining loss function...', end='')
     if loss_name == 'pairwise':
         METRICS = 'distance'
         def loss_func(x, y, equal):
@@ -116,8 +120,10 @@ def main(
         
     else:
         raise ValueError('Invalid loss_name: {}'.format(loss_name))
+    print('Finished')
 
     # Define graph
+    print('Defining train_step()...', end='')
     optimizer = tf.keras.optimizers.Adam()
     train_loss = tf.keras.metrics.Mean(name='train_loss')
     test_loss = tf.keras.metrics.Mean(name='test_loss')
@@ -183,6 +189,7 @@ def main(
             loss = loss_func(x_, labels)
             test_loss(loss)
 
+    print('Preparing training configure...', end='')
     # save config
     config = {}
     config['train_list'] = train_list
@@ -212,6 +219,9 @@ def main(
     template = '{} {:.6f} {:.6f}'
     with open('logs/{}/history.csv'.format(training_id), 'w') as f:
         f.write(header + '\n')
+    print('Finished.')
+
+    print('Start training.')
     for epoch in range(epochs):
         if loss_name == 'pairwise':
             for (x_images, x_labels), (y_images, y_labels) in zip(train_dataset_x, train_dataset_y):
