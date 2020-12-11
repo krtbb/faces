@@ -50,30 +50,47 @@ def main(
         label = tf.strings.to_number(label, tf.int32)
         return label
 
-    train_names = load_list(train_list)[:100]
+    def get_num_classes(*args):
+        path = args[0][0]
+        data_root_path = '/'.join(path.split('/')[:-2])
+        return len(os.listdir(data_root_path))
+
+    train_names = load_list(train_list)
+    test_names = load_list(test_list)
+    if debug:
+        train_names = train_names[:64]
+        test_names = test_names[:64]
+    num_classes = get_num_classes(train_names, test_names)
+    print('### num_classes: ', num_classes)
+
     train_dataset_paths = tf.data.Dataset.from_tensor_slices(train_names)
     train_dataset_image = train_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     train_dataset_label = train_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     train_dataset_x = tf.data.Dataset.zip((train_dataset_image, train_dataset_label))
-    test_names = load_list(test_list)[:100]
+    train_dataset_x = train_dataset_x.shuffle(buffer_size=len(list(train_dataset_x)))
+    train_dataset_x = train_dataset_x.repeat()
+    train_dataset_x = train_dataset_x.batch(batchsize)
+    train_dataset_x = train_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
     test_dataset_paths = tf.data.Dataset.from_tensor_slices(test_names)
     test_dataset_image = test_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     test_dataset_label = test_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     test_dataset_x = tf.data.Dataset.zip((test_dataset_image, test_dataset_label))
-    for dataset in [train_dataset_x, test_dataset_x]:
-        dataset = dataset.shuffle(buffer_size=len(list(dataset)))
-        dataset = dataset.repeat()
-        dataset = dataset.batch(batchsize)
-        dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    test_dataset_x = test_dataset_x.shuffle(buffer_size=len(list(test_dataset_x)))
+    test_dataset_x = test_dataset_x.repeat()
+    test_dataset_x = test_dataset_x.batch(batchsize)
+    test_dataset_x = test_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
     data_augmentation = tf.keras.Sequential([
-        #tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
+        tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
         #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
     ])
     
     # Load model
     model = FaceModel(size=insize, channels=3, z_dim=outsize,
-                      backbone_type=model_name, use_pretrain=True,
+                      backbone_type=model_name, use_pretrain=False,
                       w_decay=5e-4, name='facemodel')
+    model.summary()
 
     # Load loss functions
     if loss_name == 'pairwise':
@@ -88,10 +105,15 @@ def main(
         METRICS = 'classification'
         from arcface_modules.models import ArcHead
         from arcface_modules.losses import SoftmaxLoss
-        def loss_func(z, labels, margin=0.5, logist_scale=64):
-            logist = ArcHead(num_classes=num_classes, margin=margin,
-                             logist_scale=logist_scale)(z, labels)
-            return SoftmaxLoss()(labels, logist)
+        margin = 0.5
+        logist_scale = 64
+        archead = ArcHead(num_classes=num_classes, margin=margin,
+                          logist_scale=logist_scale)
+        softmax_fn = SoftmaxLoss()
+        def loss_func(z, labels):
+            logist = archead(z, labels)
+            return softmax_fn(labels, logist)
+        
     else:
         raise ValueError('Invalid loss_name: {}'.format(loss_name))
 
@@ -152,7 +174,7 @@ def main(
                 x_ = model(x)
                 loss = loss_func(x_, labels)
             gradients = tape.gradient(loss, model.trainable_variables)
-            optimizer.apply_gradients(zip(gradients, model_trainable_variables))
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
             train_loss(loss)
         
         #@tf.function
