@@ -82,7 +82,7 @@ def main(
     test_dataset_x = test_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     data_augmentation = tf.keras.Sequential([
-        tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
+        #tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
         #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
     ])
     print('Finished.')
