@@ -76,7 +76,6 @@ def main(
     train_dataset_label = train_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     train_dataset_x = tf.data.Dataset.zip((train_dataset_image, train_dataset_label))
     train_dataset_x = train_dataset_x.shuffle(buffer_size=train_datanum)
-    #train_dataset_x = train_dataset_x.repeat()
     train_dataset_x = train_dataset_x.batch(batchsize)
     train_dataset_x = train_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
@@ -86,7 +85,6 @@ def main(
     test_dataset_label = test_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     test_dataset_x = tf.data.Dataset.zip((test_dataset_image, test_dataset_label))
     test_dataset_x = test_dataset_x.shuffle(buffer_size=test_datanum)
-    #test_dataset_x = test_dataset_x.repeat()
     test_dataset_x = test_dataset_x.batch(batchsize)
     test_dataset_x = test_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
@@ -215,8 +213,6 @@ def main(
         os.makedirs('logs/{}'.format(training_id))
     with open('logs/{}/train_config.json'.format(training_id), 'w') as f:
         json.dump(config, f)
-
-    # prepare training
 
     # execute train
     if loss_name in ['pairwise', 'triplet']:
