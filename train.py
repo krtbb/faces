@@ -1,3 +1,11 @@
+"""
+TODO: 
+  * add evaluation metrics
+  * add data augmentation
+  * add optimizer scheduler
+  * add other models
+"""
+
 import copy
 import cv2
 import datetime
