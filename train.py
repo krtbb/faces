@@ -70,6 +70,17 @@ def main(
         data_root_path = '/'.join(path.split('/')[:-2])
         return len(os.listdir(data_root_path))
 
+    def generate_dataset(data_names, batchsize):
+        data_num = len(data_names)
+        dataset_paths = tf.data.Dataset.from_tensor_slices(data_names)
+        dataset_image = dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset_label = dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = tf.data.Dataset.zip((dataset_image, dataset_label))
+        dataset = dataset.shuffle(buffer_size=data_num)
+        dataset = dataset.batch(batchsize)
+        dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        return dataset
+
     train_names = load_list(train_list)
     test_names = load_list(test_list)
     if debug:
@@ -78,24 +89,14 @@ def main(
     num_classes = get_num_classes(train_names, test_names)
     print('Use {} traindata, {} testdata.'.format(len(train_names), len(test_names)))
 
-    train_datanum = len(train_names)
-    train_dataset_paths = tf.data.Dataset.from_tensor_slices(train_names)
-    train_dataset_image = train_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    train_dataset_label = train_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    train_dataset_x = tf.data.Dataset.zip((train_dataset_image, train_dataset_label))
-    train_dataset_x = train_dataset_x.shuffle(buffer_size=train_datanum)
-    train_dataset_x = train_dataset_x.batch(batchsize)
-    train_dataset_x = train_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-
-    test_datanum = len(test_names)
-    test_dataset_paths = tf.data.Dataset.from_tensor_slices(test_names)
-    test_dataset_image = test_dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    test_dataset_label = test_dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    test_dataset_x = tf.data.Dataset.zip((test_dataset_image, test_dataset_label))
-    test_dataset_x = test_dataset_x.shuffle(buffer_size=test_datanum)
-    test_dataset_x = test_dataset_x.batch(batchsize)
-    test_dataset_x = test_dataset_x.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-
+    train_dataset_x = generate_dataset(train_names, batchsize)
+    test_dataset_x = generate_dataset(test_names, batchsize)
+    if loss_name in ['pairwise', 'triplet']:
+        train_dataset_y = generate_dataset(train_names, batchsize)
+        test_dataset_y = generate_dataset(test_names, batchsize)
+    if loss_name in ['triplet']:
+        train_dataset_z = generate_dataset(train_names, batchsize)
+        test_dataset_z = generate_dataset(test_names, batchsize)
     data_augmentation = tf.keras.Sequential([
         #tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
         #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
@@ -223,12 +224,6 @@ def main(
         json.dump(config, f)
 
     # execute train
-    if loss_name in ['pairwise', 'triplet']:
-        train_dataset_y = copy.deepcopy(train_dataset_x)
-        test_dataset_y = copy.deepcopy(test_dataset_x)
-    if loss_name in ['triplet']:
-        train_dataset_z = copy.deepcopy(train_dataset_x)
-        test_dataset_z = copy.deepcopy(test_dataset_x)
     header = 'epoch trainloss, testloss'
     template = '{} {} {:.6f} {:.6f}'
     with open('logs/{}/history.csv'.format(training_id), 'w') as f:
