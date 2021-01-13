@@ -19,3 +19,9 @@ def load_json(path):
     with open(path) as f:
         config = json.load(f)
     return config
+
+def load_list(path):
+    with open(path) as f:
+        lines = f.readlines()
+    lines = list(map(lambda x: x.strip(), lines))
+    return lines

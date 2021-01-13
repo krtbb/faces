@@ -14,7 +14,6 @@ import numpy as np
 import os
 import sys
 import tensorflow as tf
-import datetime
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -29,12 +28,7 @@ from models.apps import FaceModel, app_net
 from utils.losses import pairwise_loss, triplet_loss
 from utils.preparations import channelSwap, normalize, resize
 from utils.preprocess import load_and_preprocess_image
-
-def load_list(path):
-    with open(path) as f:
-        lines = f.readlines()
-    lines = list(map(lambda x: x.strip(), lines))
-    return lines
+from utils.generals import load_list
 
 def main(
         train_list,
@@ -224,7 +218,7 @@ def main(
         json.dump(config, f)
 
     # execute train
-    header = 'epoch trainloss, testloss'
+    header = 'epoch time trainloss testloss'
     template = '{} {} {:.6f} {:.6f}'
     with open('logs/{}/history.csv'.format(training_id), 'w') as f:
         f.write(header + '\n')
