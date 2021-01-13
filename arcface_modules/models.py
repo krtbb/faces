@@ -20,7 +20,7 @@ def _regularizer(weights_decay=5e-4):
     return tf.keras.regularizers.l2(weights_decay)
 
 
-def Backbone(backbone_type='ResNet50', use_pretrain=True):
+def Backbone(backbone_type='ResNet50', use_pretrain=True, size=64, channels=3):
     """Backbone Model"""
     weights = None
     if use_pretrain:
@@ -28,7 +28,7 @@ def Backbone(backbone_type='ResNet50', use_pretrain=True):
 
     def backbone(x_in):
         if backbone_type == 'ResNet50':
-            return ResNet50(input_shape=x_in.shape[1:], include_top=False,
+            return ResNet50(input_shape=(size,size,3), include_top=False,
                             weights=weights)(x_in)
         elif backbone_type == 'MobileNetV2':
             return MobileNetV2(input_shape=x_in.shape[1:], include_top=False,
