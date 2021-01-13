@@ -260,8 +260,7 @@ def main(
         # saving models
         if epoch==0 or (ts_new - previous_saved_ts).total_seconds() > 3600:
             save_dir = 'logs/{}'.format(training_id)
-            saver.save(sess, '{}/model.saver'.format(save_dir))
-            tf.saved_model.save(model, '{}/model.saved_model')
+            tf.saved_model.save(model, '{}/model.saved_model'.format(save_dir))
             previous_saved_ts = datetime.datetime.now()
 
         # reset loss states

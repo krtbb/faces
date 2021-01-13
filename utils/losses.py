@@ -1,17 +1,18 @@
 import numpy as np
+import tensorflow as tf
 
 def sum_square(x, y):
-    return np.sum((x-y)**2, axis=None)
+    return tf.reduce_sum((x-y)**2, axis=None)
 
 def negative_log_likelihood(x_mu, x_sigma, y, batchsize=1, min_variance=1e-6, sep=False):
     x_sigma_ = x_sigma + min_variance
-    x_sigma_recip = np.exp(-np.log(x_sigma_))
+    x_sigma_recip = tf.exp(-np.log(x_sigma_))
     diff = x_mu - y
     if sep:
-        return np.sum( 0.5 * diff * diff * x_sigma_recip ) / batchsize, \
-               np.sum( 0.5 * np.log(x_sigma_) ) / batchsize
+        return tf.reduce_sum( 0.5 * diff * diff * x_sigma_recip ) / batchsize, \
+               tf.reduce_sum( 0.5 * np.log(x_sigma_) ) / batchsize
     else:
-        return np.sum( 0.5 * (diff*diff*x_sigma_recip + np.log(x_sigma_))) / batchsize
+        return tf.reduce_sum( 0.5 * (diff*diff*x_sigma_recip + np.log(x_sigma_))) / batchsize
 
 def pairwise_loss(x, y, equal=True, epsilon=1e+5, dist_method=sum_square):
     """
@@ -27,7 +28,9 @@ def pairwise_loss(x, y, equal=True, epsilon=1e+5, dist_method=sum_square):
     if equal:
         return dist_method(x, y)
     else:
-        return np.max(0, epsilon - dist_method(x, y) )
+        loss_ = epsilon - dist_method(x,y)
+        return tf.cond(loss_>0, lambda: loss_, lambda: 0.)
+        #return tf.reduce_max(0, epsilon - dist_method(x, y) )
 
 def triplet_loss(x, p, n, epsilon=1e+5, dist_method=sum_square):
     """
