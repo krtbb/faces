@@ -1,35 +1,27 @@
-import copy
 import cv2
-import datetime
-import json
 import numpy as np
 import os
-import sys
 import tensorflow as tf
-import datetime
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 config.log_device_placement = True
 tf.enable_eager_execution(config=config)
 
-from glob import glob
-from tqdm import tqdm
-
 from models.Encoder import Encoder
 
 from utils.generals import load_json, load_list
-from utils.losses import pairwise_loss, triplet_loss
-from utils.preparations import channelSwap, normalize, resize
-from utils.preprocess import load_and_preprocess_image
 
-def calc_distance_sum(array):
+def calc_distance_sum(array, labels):
     distance_sum = 0
     for i in range(len(array)):
         for j in range(len(array)):
             if j <= i:
                 continue
-            distance_sum += np.sqrt(np.sum((array[i]-array[j])**2))
+            if labels[i] == labels[j]:
+                distance_sum += np.sqrt(np.sum((array[i]-array[j])**2))
+            else:
+                distance_sum += 1 / np.sqrt(np.sum((array[i]-array[j])**2))
     return distance_sum
 
 def predict(list_path, log_dir, epoch):
@@ -46,6 +38,7 @@ def predict(list_path, log_dir, epoch):
 
     # prepare dataset
     images = np.zeros((len(eval_names), encoder.insize, encoder.insize, 3))
+    labels = np.array(list(map(lambda x: x.split('/')[-2], eval_names)))
     for i, name in enumerate(eval_names):
         bgr = cv2.imread(name)
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
@@ -55,7 +48,7 @@ def predict(list_path, log_dir, epoch):
 
     # execute evaluation
     encodings = encoder(images[:200])
-    distance = calc_distance_sum(encodings)
+    distance = calc_distance_sum(encodings, labels)
     
     return distance
 
