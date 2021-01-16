@@ -3,6 +3,26 @@ import pandas as pd
 
 from glob import glob
 
+def load_model(json_path):
+    """
+    Load and return Face Recongition Model
+    """
+    from models.apps import FaceModel
+    from utils.generals import load_json
+
+    config = load_json(json_path)
+    model = FaceModel(
+        size = config['insize'],
+        channels = 3,
+        z_dim = config['outsize'],
+        backbone_type = config['model_name'],
+        use_pretrain = False,
+        w_decay = 5e-4,
+        name = 'facemodel'
+        )
+    
+    return model
+
 def load_df(target):
     dirs = glob(target)
     whole_df = pd.DataFrame()
