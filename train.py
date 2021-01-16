@@ -26,6 +26,7 @@ from tqdm import tqdm
 from models.micro import FirstCNN
 from models.apps import FaceModel, app_net
 
+from utils.analysis import load_model
 from utils.losses import pairwise_loss, triplet_loss
 from utils.preparations import channelSwap, normalize, resize
 from utils.preprocess import load_and_preprocess_image
@@ -100,9 +101,18 @@ def main(
     
     # Load model
     print('Defining model...', end='')
-    model = FaceModel(size=insize, channels=3, z_dim=outsize,
-                      backbone_type=model_name, use_pretrain=False,
-                      w_decay=5e-4, name='facemodel')
+    config = {}
+    config['train_list'] = train_list
+    config['test_list'] = test_list
+    config['batchsize'] = batchsize
+    config['epoch'] = epochs
+    config['insize'] = insize
+    config['outsize'] = outsize
+    config['model_name'] = model_name
+    config['loss_name'] = loss_name
+    config['epsilon'] = epsilon
+    model = load_model(config)
+    
     print('Finished.')
     model.summary()
 
@@ -203,16 +213,6 @@ def main(
 
     print('Preparing training configure...', end='')
     # save config
-    config = {}
-    config['train_list'] = train_list
-    config['test_list'] = test_list
-    config['batchsize'] = batchsize
-    config['epoch'] = epochs
-    config['insize'] = insize
-    config['outsize'] = outsize
-    config['model_name'] = model_name
-    config['loss_name'] = loss_name
-    config['epsilon'] = epsilon
     if not os.path.exists('logs/{}'.format(training_id)):
         os.makedirs('logs/{}'.format(training_id))
     with open('logs/{}/train_config.json'.format(training_id), 'w') as f:
@@ -262,6 +262,9 @@ def main(
         # reset loss states
         train_loss.reset_states()
         test_loss.reset_states()
+    
+    # save final result
+    model.save_weights('{}/model_final.h5'.format(save_dir))
 
 if __name__ == '__main__':
     import argparse
