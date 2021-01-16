@@ -3,14 +3,13 @@ import pandas as pd
 
 from glob import glob
 
-def load_model(json_path):
+def load_model(config):
     """
     Load and return Face Recongition Model
     """
     from models.apps import FaceModel
     from utils.generals import load_json
 
-    config = load_json(json_path)
     model = FaceModel(
         size = config['insize'],
         channels = 3,

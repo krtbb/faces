@@ -24,12 +24,14 @@ from utils.preprocess import load_and_preprocess_image
 def predict(log_dir, epoch):
     # prepare model
     if 'logs' in log_dir:
-        encoder = Encoder(log_dir, epoch=-1)
+        json_path = os.path.join(log_dir, 'train_config.json')
+        config = load_json(json_path)
+        encoder = Encoder(config, epoch=-1)
     else:
         raise ValueError('Invalid log_dir(`logs` is not in log_dir')
 
     # prepare dataset
 
     resized = cv2.resize(img, (encoder.insize, encoder.insize))
-    
+
     # execute evaluation
