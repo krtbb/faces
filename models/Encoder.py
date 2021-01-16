@@ -24,7 +24,8 @@ class Encoder(object):
             saved_params_path = os.path.join(self.log_dir, 'model_{}.h5'.format(epoch))
         
         # restore models
-        self.model = load_model(json_path)
+        config = load_json(json_path)
+        self.model = load_model(config)
         self.model.load_weights(saved_params_path)
         self.insize = self.model.input_shape[1]
         self.outsize = self.model.output_shape[1]
