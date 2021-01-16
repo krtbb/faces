@@ -17,6 +17,7 @@ import tensorflow as tf
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+config.log_device_placement = True
 tf.enable_eager_execution(config=config)
 
 from glob import glob
@@ -255,6 +256,7 @@ def main(
         if epoch==0 or (ts_new - previous_saved_ts).total_seconds() > 3600:
             save_dir = 'logs/{}'.format(training_id)
             tf.saved_model.save(model, '{}/model.saved_model'.format(save_dir))
+            model.save_weights('{}/model_{}.h5'.format(save_dir, epoch+1))
             previous_saved_ts = datetime.datetime.now()
 
         # reset loss states
