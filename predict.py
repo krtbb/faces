@@ -63,8 +63,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('list', help='target list of image paths')
     parser.add_argument('log_dir', help='target directory for trained parameters')
+    parser.add_argument('list', help='target list of image paths')
     parser.add_argument('--epoch', default=-1, type=int, help='epoch, default=-1, using latest log')
     args = parser.parse_args()
 
