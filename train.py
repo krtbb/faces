@@ -275,7 +275,7 @@ if __name__ == '__main__':
     parser.add_argument('--modelname', '-M', type=str, default='ResNet50', help='name of model architecture')
     parser.add_argument('--lossname', '-L', type=str, default='pairwise', help='name of loss function')
     parser.add_argument('--epochs', '-E', type=int, default=100)
-    parser.add_argument('--batchsize', '-B', type=int, default=32)
+    parser.add_argument('--batchsize', '-B', type=int, default=16)
     parser.add_argument('--insize', '-SI', type=int, default=32, help='size of input images, int, default=32')
     parser.add_argument('--outsize', '-SO', type=int, default=128, help='size of embedded variables, int, default=128')
     parser.add_argument('--epsilon', '-P', type=float, default=1e+5, help='constants for margins in loss')
