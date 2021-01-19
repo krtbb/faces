@@ -67,12 +67,16 @@ def main(
         data_root_path = '/'.join(path.split('/')[:-2])
         return len(os.listdir(data_root_path))
 
-    def generate_paths_dataset(data_names):
+    def generate_paths_dataset(data_names, batchsize, batch=True):
         data_num = len(data_names)
         dataset_paths = tf.data.Dataset.from_tensor_slices(data_names)
+        if batch:
+            dataset_paths = dataset_paths.shuffle(buffer_size=data_num)
+            dataset_paths = dataset_paths.batch(batchsize)
+            dataset_paths = dataset_paths.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return dataset_paths
     
-    def load_paths_dataset(ds_paths):
+    def load_images_dataset(ds_paths, batchsize, data_num):
         dataset_image = ds_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset_label = ds_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = tf.data.Dataset.zip((dataset_image, dataset_label))
@@ -81,9 +85,9 @@ def main(
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return dataset
 
-    def generate_image_dataset(data_names):
-        dataset_paths = generate_paths_dataset(data_names)
-        dataset = load_paths_dataset(dataset_paths)
+    def generate_images_dataset(data_names, batchsize):
+        dataset_paths = generate_paths_dataset(data_names, batchsize, batch=False)
+        dataset = load_images_dataset(dataset_paths, batchsize, len(data_names))
         return dataset
 
     train_names = load_list(train_list)
@@ -94,14 +98,15 @@ def main(
     num_classes = get_num_classes(train_names, test_names)
     print('Use {} traindata, {} testdata.'.format(len(train_names), len(test_names)))
 
-    train_dataset_x = generate_image_dataset(train_names, batchsize)
-    test_dataset_x = generate_image_dataset(test_names, batchsize)
+    train_dataset_x = generate_images_dataset(train_names, batchsize)
+    test_dataset_x = generate_images_dataset(test_names, batchsize)
     if loss_name in ['pairwise', 'triplet']:
-        train_dataset_y = generate_image_dataset(train_names, batchsize)
-        test_dataset_y = generate_image_dataset(test_names, batchsize)
+        train_dataset_y = generate_images_dataset(train_names, batchsize)
+        test_dataset_y = generate_images_dataset(test_names, batchsize)
     if loss_name in ['triplet']:
-        train_dataset_z = generate_image_dataset(train_names, batchsize)
-        test_dataset_z = generate_image_dataset(test_names, batchsize)
+        train_dataset_z = generate_images_dataset(train_names, batchsize)
+        test_dataset_z = generate_images_dataset(test_names, batchsize)
+
     #augmentor = Augmentor(use_brightness=False, use_darkness=False)
     #def rotate(img):
     #    return tf.keras.preprocessing.image.random_rotation(img, 30, row_axis=0, col_axis=1, channel_axis=2)
@@ -231,7 +236,7 @@ def main(
 
     # execute train
     header = 'epoch time trainloss testloss'
-    template = '{} {} {:.6f} {:.6f}'
+    template = '{} {} {:.12f} {:.12f}'
     with open('logs/{}/history.csv'.format(training_id), 'w') as f:
         f.write(header + '\n')
     print('Finished.')
@@ -254,6 +259,7 @@ def main(
             for (x_images, x_labels), (y_images, y_labels), (z_images, z_labels) in zip(test_dataset_x, test_dataset_y, test_dataset_z):
                 test_step(x_images, y_images, z_images)
         elif loss_name == 'arcface':
+            #for images, labels in train_dataset_x:
             for images, labels in train_dataset_x:
                 train_step(augmentor(images), labels)
             for images, labels in test_dataset_x:
@@ -300,6 +306,7 @@ if __name__ == '__main__':
         args.train_list,
         args.test_list,
         args.epochs,
+        lr = args.lr,
         batchsize = args.batchsize,
         insize = args.insize,
         outsize = args.outsize,
