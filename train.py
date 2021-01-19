@@ -27,6 +27,7 @@ from models.micro import FirstCNN
 from models.apps import FaceModel, app_net
 
 from utils.analysis import load_model
+from utils.Augment import Augmentor
 from utils.losses import pairwise_loss, triplet_loss
 from utils.preparations import channelSwap, normalize, resize
 from utils.preprocess import load_and_preprocess_image
@@ -66,15 +67,23 @@ def main(
         data_root_path = '/'.join(path.split('/')[:-2])
         return len(os.listdir(data_root_path))
 
-    def generate_dataset(data_names, batchsize):
+    def generate_paths_dataset(data_names):
         data_num = len(data_names)
         dataset_paths = tf.data.Dataset.from_tensor_slices(data_names)
-        dataset_image = dataset_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        dataset_label = dataset_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        return dataset_paths
+    
+    def load_paths_dataset(ds_paths):
+        dataset_image = ds_paths.map(preprocess_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset_label = ds_paths.map(preprocess_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = tf.data.Dataset.zip((dataset_image, dataset_label))
         dataset = dataset.shuffle(buffer_size=data_num)
         dataset = dataset.batch(batchsize)
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        return dataset
+
+    def generate_image_dataset(data_names):
+        dataset_paths = generate_paths_dataset(data_names)
+        dataset = load_paths_dataset(dataset_paths)
         return dataset
 
     train_names = load_list(train_list)
@@ -85,18 +94,20 @@ def main(
     num_classes = get_num_classes(train_names, test_names)
     print('Use {} traindata, {} testdata.'.format(len(train_names), len(test_names)))
 
-    train_dataset_x = generate_dataset(train_names, batchsize)
-    test_dataset_x = generate_dataset(test_names, batchsize)
+    train_dataset_x = generate_image_dataset(train_names, batchsize)
+    test_dataset_x = generate_image_dataset(test_names, batchsize)
     if loss_name in ['pairwise', 'triplet']:
-        train_dataset_y = generate_dataset(train_names, batchsize)
-        test_dataset_y = generate_dataset(test_names, batchsize)
+        train_dataset_y = generate_image_dataset(train_names, batchsize)
+        test_dataset_y = generate_image_dataset(test_names, batchsize)
     if loss_name in ['triplet']:
-        train_dataset_z = generate_dataset(train_names, batchsize)
-        test_dataset_z = generate_dataset(test_names, batchsize)
-    data_augmentation = tf.keras.Sequential([
-        #tf.keras.layers.experimental.preprocessing.RandomFlip('vertical'),
-        #tf.keras.layers.experimental.preprocessing.RandomRotation(0.1),
-    ])
+        train_dataset_z = generate_image_dataset(train_names, batchsize)
+        test_dataset_z = generate_image_dataset(test_names, batchsize)
+    #augmentor = Augmentor(use_brightness=False, use_darkness=False)
+    #def rotate(img):
+    #    return tf.keras.preprocessing.image.random_rotation(img, 30, row_axis=0, col_axis=1, channel_axis=2)
+    #augmentor.funcs.append(rotate)
+    augmentor = lambda x: x
+
     print('Finished.')
     
     # Load model
@@ -231,17 +242,20 @@ def main(
     for epoch in range(epochs):
         if loss_name == 'pairwise':
             for (x_images, x_labels), (y_images, y_labels) in zip(train_dataset_x, train_dataset_y):
-                train_step(x_images, y_images, x_labels==y_labels)
+                train_step(augmentor(x_images), auguentor(y_images), x_labels==y_labels)
             for (x_images, x_labels), (y_images, y_labels) in zip(test_dataset_x, test_dataset_y):
                 test_step(x_images, y_images, x_labels==y_labels)
         elif loss_name == 'triplet':
+            raise NotImplementedError()
+            # TODO 
+            # * arguments for train_step() are Invalid.
             for (x_images, x_labels), (y_images, y_labels), (z_images, z_labels) in tqdm(zip(train_dataset_x, train_dataset_y, train_dataset_z)):
-                train_step(x_images, y_images, z_images)
+                train_step(augmentor(x_images), augmentor(y_images), augmentor(z_images))
             for (x_images, x_labels), (y_images, y_labels), (z_images, z_labels) in zip(test_dataset_x, test_dataset_y, test_dataset_z):
                 test_step(x_images, y_images, z_images)
         elif loss_name == 'arcface':
             for images, labels in train_dataset_x:
-                train_step(images, labels)
+                train_step(augmentor(images), labels)
             for images, labels in test_dataset_x:
                 test_step(images, labels)
 
