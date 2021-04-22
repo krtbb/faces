@@ -1,1 +1,1 @@
-forked from https://github.com/peteryuX/arcface-tf2/
+partly forked from https://github.com/peteryuX/arcface-tf2/
